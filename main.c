@@ -1,13 +1,15 @@
-/* Objetivo: Fazer um programa que simule o envio um dado de um computador A para um computador computador B 
+/* Objetivo: Fazer um programa que simule o envio um dado de um computador 'A' para um computador computador 'B' 
 realizando as devidas conversões entre String, da mensagem a ser enviada, e os bytes e bits a serem
-verificados pela camada de enlace.
+verificados pela camada de enlace, passando por um meio de transporte possivelmente ruidoso, que pode 'flipar' os bits
+então, métodos de verificação de erros também são implementados.
 */
 #include <stdio.h>       // Para entrada/saida (leitura e escrita via teclado monitor e arquivos)
 #include <stdlib.h>      // Para alocação dinâmica
 #include <string.h>      // Para manipular strings e setar memória
-#include <time.h>//necessário p/ função time()
+#include <time.h>        //necessário p/ função time()
 
 //Definição de um tipo booleano para C -> Unsigned char é a menor unidade de dados possível na linguagem.
+//Será usado, tanto no retorno de funções (deu certo ou não) quanto para representar os bits sendo 0 FALSE e 1 TRUE
 #define boolean unsigned char 
 #define TRUE 1
 #define FALSE 0
@@ -16,26 +18,7 @@ verificados pela camada de enlace.
 #define max(a,b) ((a) > (b) ? (a) : (b))
 #define min(a,b) ((a) < (b) ? (a) : (b))
 
-boolean AplicacaoTransmissora(void);
-boolean AplicacaoReceptora(char* mensagem);
-boolean CamadaDeAplicacaoTransmissora(char* mensagem);
-boolean CamadaDeAplicacaoReceptora(boolean* msg);
-boolean* StringToBits(char* mensagem);
-boolean* IntTo16Bits(int tamanhodamensagem);
-char* BitsToString(boolean* msg);
-int Bits16ToInt(boolean* intem16bits);
-boolean CamadaDeEnlaceDadosTransmissora(boolean* msg);
-boolean CamadaDeEnlaceDadosTransmissoraControleDeErro(boolean* msg);
-boolean CamadaDeEnlaceDadosReceptora(boolean* msg);
-boolean CamadaDeEnlaceDadosReceptoraControleDeErro(boolean* msg);
-boolean MeioDeTransmissao(boolean* msg);
-
-unsigned int METODO_DE_ERROS = 1;
-unsigned int CHANCE_DE_ERRO = 1;
-unsigned int TAMANHO_MAXIMO_DA_MENSAGEM = 100;
-unsigned int TENTATIVAS_REENVIO = 5;
-
-/* O objetivo principal é transmitir os dados
+/*
 
 Relembrando as camadas da rede e suas principais funções:
 
@@ -50,13 +33,47 @@ No trabalho anterior, já foi tratado de portas e protocolos que englobam as cam
 
 */
 
+//Aplicações: poderiam ser qualquer coisa (um jogo, um reprodutor de vídeo,etc) porém, no caso
+// A aplicação transmissora transmite uma string inserida pelo usuário e a aplicação receptora imprime essa mensagem
+boolean AplicacaoTransmissora(void);
+boolean AplicacaoReceptora(char* mensagem);
+
+//Camada De aplicação: funciona como o SO do sistema, integrado com algumas camadas extras como transporte e rede tem como
+//objetivo decodificar a mensagens de alto nível (strings ou inteiros) de/para bits e envia-las para a rede 
+// (no caso as camadas de Enlace e a aplicação)
+boolean CamadaDeAplicacaoTransmissora(char* mensagem);
+boolean CamadaDeAplicacaoReceptora(boolean* msg);
+//Funções de apoio para a camada de aplicação: Realizam conversões de strings e inteiros para bits e vice-versa
+boolean* StringToBits(char* string);
+boolean* IntTo16Bits(int i);
+char* BitsToString(boolean* msg16bits);
+int Bits16ToInt(boolean* int16bits);
+int Bits8ToInt(boolean* int8bits);
+boolean* copiaVetor(boolean* vetorcopiado, int tamanho);
+
+//Camada de enlace: atua como ultimo mecanismo antes de enviar/receber os dados. Ela procura por erros e prepara o pacote
+// Para enviá-lo ao meio de transporte 
+boolean CamadaDeEnlaceDadosTransmissora(boolean* msg);
+boolean CamadaDeEnlaceDadosTransmissoraControleDeErro(boolean* msg);
+boolean CamadaDeEnlaceDadosReceptora(boolean* msg);
+boolean CamadaDeEnlaceDadosReceptoraControleDeErro(boolean* msg);
+
+//Um meio de transmissao ruidoso, que pode 'flipar' os bits.
+boolean MeioDeTransmissao(boolean* msg);
+
+//Variáveis globais referentes a simulação
+unsigned int METODO_DE_ERROS = 1; //Qual método de controle erros será usado
+unsigned int CHANCE_DE_ERRO = 0; // Qual a chance de ocorrer um erro durante a transmissão
+unsigned int TAMANHO_MAXIMO_DA_MENSAGEM = 100; // O tamanho máximo da mensagem a ser enviada
+unsigned int TENTATIVAS_REENVIO = 5; // Quantas vezes a camada de enlace tenta reenviar os dados.
+
 //O programa principal faz a interface com o usuário, para que ele defina as variáveis envolvidas na transmissão da mensagem
 int main (void){
 
     int variaveldomenu;
     boolean loop=TRUE;
 
-    printf("Ola! Bem vindo(a) ao simulador de transmissão de dados v1.0.1\n");
+    printf("Ola! Bem vindo(a) ao simulador de transmissao de dados v1.0.1\n");
     printf("1: Iniciar Programa!\n");
     printf("2: Metodo de controle de erros [1=CRC,2=Bit Impar,3=Bit Par,4=Enquadramento] (Atual = %d)\n",METODO_DE_ERROS);
     printf("3: Porcentagem de chance de ocorrer um erro em cada bit da transmissao (Atual = %d%%)\n",CHANCE_DE_ERRO);
@@ -76,7 +93,7 @@ int main (void){
     case 1:
          fflush(stdin);
          if(AplicacaoTransmissora()) printf("Mensagem enviada com sucesso!\n");
-         else printf("Ocorreu um erro e a mensagem não pode ser enviada\n");
+         else printf("Ocorreu um erro e a mensagem nao pode ser enviada\n");
         break;
     case 2:
         do{
@@ -148,10 +165,15 @@ boolean AplicacaoTransmissora(void){
 
 boolean AplicacaoReceptora(char* mensagem){
 
-    //A aplicação recptora quer, receber uma string e imprimi-la na tela.
+    //A aplicação receptora quer, receber uma string e imprimi-la na tela.
 
     if(mensagem!=NULL) { // Se a mensagem é uma string de fato, a imprime
+    printf("A mensagem recebida foi: ");
     fputs(mensagem,stdout);
+
+    //A Aplicação não vai usar mais a mensagem:
+    free(mensagem);
+
     return TRUE; // Deu tudo certo
     }
 
@@ -167,7 +189,8 @@ boolean CamadaDeAplicacaoTransmissora(char* mensagem){
     boolean* msg; // Como são bits, os valores válidos são 0 e 1 (true ou falso)
     boolean deucerto=FALSE;
 
-    //Função que converte uma string para um grande array de bits (os 16 primeiros bits são o tamanho)
+    //Função que converte uma string para um grande array de bits
+    //Os 16 primeiros bits representam o número de caracteres da string em binário
     msg=StringToBits(mensagem);
 
     if(msg!=NULL){
@@ -179,12 +202,16 @@ boolean CamadaDeAplicacaoTransmissora(char* mensagem){
     }
     //Libera a mensagem (binária)
     free(msg);
+
+    //Retorna se funcionou ou não
     if(deucerto==TRUE) return TRUE;
-    else return FALSE; // Ocorreu algum erro
+    else return FALSE; 
 
 }
 
 boolean CamadaDeAplicacaoReceptora(boolean* msg){
+
+    //A camada de apicação receptura, recebe uma array de bits e o transforma em uma mensagem em string
 
     char* mensagem;
 
@@ -193,8 +220,11 @@ boolean CamadaDeAplicacaoReceptora(boolean* msg){
 
     if(mensagem!=NULL){ // Se a mensagem foi recebida corretamente
         
-        AplicacaoReceptora(mensagem); // Passa a mensagem para a aplicação
-        return TRUE; // Avisa que deu tudo certo
+        if(AplicacaoReceptora(mensagem)==TRUE){
+
+            return TRUE; // Avisa que deu tudo certo
+        } // Passa a mensagem para a aplicação
+       
     
     }
 
@@ -204,19 +234,18 @@ boolean CamadaDeAplicacaoReceptora(boolean* msg){
 
 boolean CamadaDeEnlaceDadosTransmissora(boolean* msg){
 
-    int tentativas = TENTATIVAS_REENVIO;
+    int tentativas;
 
     //Chama o controle de Erros
-    if(CamadaDeEnlaceDadosTransmissoraControleDeErro(msg)){ // Se o erro foi filtrado, pode chamar a camada física (meio de transmissão)
+    if(CamadaDeEnlaceDadosTransmissoraControleDeErro(msg)==TRUE){ // Se o erro foi filtrado, pode chamar a camada física (meio de transmissão)
         
-        while (tentativas>0){ // Faz o número de tentativas necessárias a função que envia os dados, se nenhuma der certo, retorna um erro
-            if(MeioDeTransmissao(msg)==TRUE) return TRUE; // Se a mensagem foi enviada com sucerro, retorna sucesso
-            tentativas--;
+        for(tentativas=TENTATIVAS_REENVIO;tentativas>0;tentativas--){ // Faz o número de tentativas necessárias a função que envia os dados, se nenhuma der certo, retorna um erro
+            if(MeioDeTransmissao(msg)==TRUE) return TRUE; // Se a mensagem foi enviada com sucesso, retorna sucesso
         }
         
     } 
 
-        return FALSE; // Ocorreu um erro
+        return FALSE; // Ocorreu um erro na transmissão (numero de chamadas excedido )
 
 }
 
@@ -240,15 +269,16 @@ boolean CamadaDeEnlaceDadosTransmissoraControleDeErro(boolean* msg){
 
     }
 
-    return FALSE;
+    return TRUE;
 }
 
 boolean CamadaDeEnlaceDadosReceptora(boolean* msg){
 
-       if(CamadaDeEnlaceDadosReceptoraControleDeErro(msg)==FALSE){ // Se não houveram erros
+       if(CamadaDeEnlaceDadosReceptoraControleDeErro(msg)==TRUE){ // Se a mensagem está correta
        CamadaDeAplicacaoReceptora(msg); // Manda a mensagem para a aplicação
        return TRUE; //Manda um sinal de deu certo para o meio
        }
+       //Se não está, manda um sinal de falso que solicita uma retransmissão
        else return FALSE;
 }
 
@@ -270,40 +300,63 @@ boolean CamadaDeEnlaceDadosReceptoraControleDeErro(boolean* msg){
         break;
     }
 
-    return FALSE;
+    return TRUE;
 }
 
 boolean MeioDeTransmissao (boolean* msg) {
 
     int erro,tamanho,i;
 
-    boolean* fluxoA;
-    boolean* fluxoB;
+    boolean* fluxoA; // Bits que saem do computador A
+    boolean* fluxoB; // Bits que chegam ao computador B
 
-    srand(time(NULL)); // Seta a semente aleatória
+    srand(time(NULL)); // Seta a semente aleatória (para ocorrerem erros de flip de bits)
 
     tamanho=Bits16ToInt(msg);// Captura o tamanho da mensagem
 
+    //debug
+
+    /*
+    printf("tamanho = %d\n",tamanho);
+    for(i=0;i<(tamanho*8)+16;i++){
+        if(i%8==0 && i!=0) printf(" ");
+        printf("%d",msg[i]);
+    } 
+    printf("\n");
+    */
+   
     // O fluxo que sai de A é a mensagem enviada para o Meio (é necessária uma cópia, para não perder os dados originais, caso haja uma mudança no meio)
     // Lembrando que o simulador não tem como foco a performance mas sim, a simulação.
     fluxoA= copiaVetor(msg,(tamanho*8)+16); 
     fluxoB=(boolean*)malloc(sizeof(boolean)*(tamanho*8)+16);
     
-    //Coemeça a transmitir os dados
-    for(i=16;i<(tamanho*8)+16;i++){
-        //Se um numero aleatorio entre 1 e 100 for maior que a probabilidade, nada acontece
-        if((rand()%100+1)>CHANCE_DE_ERRO) fluxoB[i]=fluxoA[i];
-        //Porém, se não for, ocorreu um erro no bit e esse bit é flipado
-        else if(fluxoA[i]==TRUE) fluxoB[i]=FALSE;
-        else fluxoB[i]=TRUE;
+    //Começa a transmitir os dados (8 é o numero de bits de cada caracter e 16 é o numero de bits que representam o tamanho)
+    for(i=0;i<(tamanho*8)+16;i++){
+        //O bit vai sendo normalmente transferido
+        fluxoB[i]=fluxoA[i];
+        //E aqui a probabilidade de um bit ser 'flipado' entra:
+        //Se um numero aleatorio entre 1 e 100 for menor ou igual que a probabilidade de dar erro, o erro acontece e o bit é flipado
+        if((rand()%100+1)<=CHANCE_DE_ERRO){
+            if(fluxoB[i]==TRUE) fluxoB[i]=FALSE;
+            else fluxoB[i]=TRUE;
+        }
     }
 
-    //Passa os dados para camada de enlace receptora, se ela não detectou erros, ela envia um ack que retorna para a camada transmissora
+ //   printf("fluxoB= ");
+ //   for(i=0;i<(tamanho*8)+16;i++) printf("%d",fluxoB[i]);
+
+    //Passa os dados para camada de enlace receptora, se ela não detectou erros, ela envia um ack que retorna para a camada transmissora confirmando o envio correto dos dados
     if(CamadaDeEnlaceDadosReceptora(fluxoB)==TRUE){
+        free(fluxoB);
+        free(fluxoA);
         return TRUE;
     }
     //Se os dados não estavam íntegros na camada de enlace receptora, um sinal é enviado para a camada transmissora, pedindo a retransmissão.
-    else return FALSE;
+    else{
+        free(fluxoB);
+        free(fluxoA);
+        return FALSE;
+    } 
 
 }
 
@@ -311,35 +364,37 @@ boolean* copiaVetor(boolean* vetorcopiado, int tamanho){
 
     int i;
 
-    boolean* vetorcopia = (boolean*) malloc (sizeof(boolean)*tamanho);
+    boolean* vetorcopia = (boolean*) malloc(sizeof(boolean)*tamanho);
 
     for(i=0;i<tamanho;i++){
         vetorcopia[i]=vetorcopiado[i];
     }
 
-    return vetorcopiado;
+    return vetorcopia;
 
 }
 
 boolean* StringToBits(char* mensagem){
 
     int i,j,tamanhodamensagem;
-    boolean* mb; // mb é uma abreviação para mensagem em bits
+    boolean* mb; // mb é uma abreviação para 'mensagem em bits'
     boolean* tamanhoembits;
 
-    tamanhodamensagem=strlen(mensagem);
+    tamanhodamensagem=strlen(mensagem); // Pega o numero de caracteres da mensagem
 
     mb=(boolean*)malloc(sizeof(boolean)*(tamanhodamensagem*8)+16); //8 bits por caractere + 16 para o tamanho da mensagem
     if (mb==NULL) return NULL;
 
-    tamanhoembits=IntTo16Bits(tamanhodamensagem);
+    tamanhoembits=IntTo16Bits(tamanhodamensagem); // Transforma o numero de caracteres da mensagem em um numero de 16 bits
     if(tamanhoembits==NULL) return NULL;
 
-    for(i=0;i<16;i++){
+    for(i=0;i<16;i++){  // Armazena esse número na mensagem
         mb[i]=tamanhoembits[i];
     }
 
-    for(i=2;i<tamanhodamensagem;i++){ // Para cara caracter da mensagem
+    free(tamanhoembits); // libera o vetor auxiliar que guardava os tamanhos
+
+    for(i=0;i<tamanhodamensagem;i++){ // Para cara caracter da mensagem (passado os 16 primeiros bits)
 
         /*
             Faz o and do numero deslocado para esquerda (de 0 a 7 vezes) com 1000 0000, ou seja
@@ -347,11 +402,12 @@ boolean* StringToBits(char* mensagem){
         */
 
         for(j=0;j<8;j++){
-            if(mensagem[i] << j & 128) mb[(i*8)+j] = TRUE; 
-            else mb[(i*8)+j] = FALSE;
+            if(mensagem[i] << j & 128) mb[(i*8)+j+16] = TRUE; 
+            else mb[(i*8)+j+16] = FALSE;
         }
 
-        /* debug
+        //debug
+        /*
         printf("O codigo para o caracter %c e: ",mensagem[i]);
         for(int k=0;k<8;k++){
             printf("%d",mb[(i*8)+k]);
@@ -365,35 +421,73 @@ boolean* StringToBits(char* mensagem){
     return mb;
 }
 
+
 boolean* IntTo16Bits(int tamanhodamensagem){
 
     int i;
     int numero=tamanhodamensagem;
+    int guardaresto;
     boolean* numero16bits;
 
-    numero16bits=malloc(sizeof(boolean*)*16);
+    numero16bits=malloc(sizeof(boolean*)*16); // Aloca os 16 bits
     if(numero16bits==NULL) return NULL;
 
-    for(i=0;i<16;i++){
-
+    for(i=15;i>=0;i--){
+        if(numero%2==1) numero16bits[i]=1;
+        else numero16bits[i]=0;
+        numero=numero/2;
     }
 
+    //debug
+    //for(i=0;i<16;i++) printf("%d",numero16bits[i]);
+
+    return numero16bits;
 }
 
 char* BitsToString(boolean* msg){
 
-   
+    int i,j,tamanho;
+    char letra;
+    char* mensagem;
 
-    return NULL;
-}
+    tamanho=Bits16ToInt(msg);
 
-int Bits16ToInt(boolean* intem16bits){
+    mensagem=(char*)malloc(sizeof(char)*tamanho+8); // Reserva um para o /0
 
-    int i,pow2;
-
-    for(i=0;i<16;i++){
-
+    j=0;
+    for(i=16;i<(tamanho*8)+16;i+=8){
+        letra=Bits8ToInt(msg+i);
+        mensagem[j]=letra;
+        j++;
     }
 
-    return 1;
+    mensagem[j]='\0';
+
+    return mensagem;
+}
+
+int Bits16ToInt(boolean* int16bits){
+
+    int i,pow2,numero;
+
+    pow2=1;numero=0;
+    for(i=15;i>=0;i--){
+        if(int16bits[i]==1) numero+=pow2;
+        pow2=pow2*2;
+    }
+
+    return numero;
+}
+
+int Bits8ToInt(boolean* int8bits){
+
+    int i,pow2,numero;
+
+    pow2=1;numero=0;
+    for(i=7;i>=0;i--){
+        if(int8bits[i]==1) numero+=pow2;
+        pow2=pow2*2;
+    }
+
+    return numero;
 }
