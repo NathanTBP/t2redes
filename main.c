@@ -14,9 +14,12 @@ então, métodos de verificação de erros também são implementados.
 #define TRUE 1
 #define FALSE 0
 
-//definição de máximos e mínimos para 2 valores
-#define max(a,b) ((a) > (b) ? (a) : (b))
-#define min(a,b) ((a) < (b) ? (a) : (b))
+struct vetorb{
+    boolean* vetor;
+    int tamanho;
+};
+
+typedef struct vetorb Vetorb;
 
 /*
 
@@ -54,16 +57,18 @@ boolean* copiaVetor(boolean* vetorcopiado, int tamanho);
 //Camada de enlace: atua como ultimo mecanismo antes de enviar/receber os dados. Ela procura por erros e prepara o pacote
 // Para enviá-lo ao meio de transporte 
 boolean CamadaDeEnlaceDadosTransmissora(boolean* msg);
-boolean CamadaDeEnlaceDadosTransmissoraControleDeErro(boolean* msg);
+Vetorb CamadaDeEnlaceDadosTransmissoraControleDeErro(boolean* msg);
 boolean CamadaDeEnlaceDadosReceptora(boolean* msg);
-boolean CamadaDeEnlaceDadosReceptoraControleDeErro(boolean* msg);
+boolean* CamadaDeEnlaceDadosReceptoraControleDeErro(boolean* msg);
 
 //Um meio de transmissao ruidoso, que pode 'flipar' os bits.
-boolean MeioDeTransmissao(boolean* msg);
+boolean MeioDeTransmissao(boolean* msg, int tamanhototal);
+boolean Flip(boolean bit); // Flipa um bit
+
 
 //Variáveis globais referentes a simulação
-unsigned int METODO_DE_ERROS = 1; //Qual método de controle erros será usado
-unsigned int CHANCE_DE_ERRO = 0; // Qual a chance de ocorrer um erro durante a transmissão
+unsigned int METODO_DE_ERROS = 2; //Qual método de controle erros será usado
+float CHANCE_DE_ERRO = 1.5; // Qual a chance de ocorrer um erro durante a transmissão
 unsigned int TAMANHO_MAXIMO_DA_MENSAGEM = 100; // O tamanho máximo da mensagem a ser enviada
 unsigned int TENTATIVAS_REENVIO = 5; // Quantas vezes a camada de enlace tenta reenviar os dados.
 
@@ -76,7 +81,7 @@ int main (void){
     printf("Ola! Bem vindo(a) ao simulador de transmissao de dados v1.0.1\n");
     printf("1: Iniciar Programa!\n");
     printf("2: Metodo de controle de erros [1=CRC,2=Bit Impar,3=Bit Par,4=Enquadramento] (Atual = %d)\n",METODO_DE_ERROS);
-    printf("3: Porcentagem de chance de ocorrer um erro em cada bit da transmissao (Atual = %d%%)\n",CHANCE_DE_ERRO);
+    printf("3: Porcentagem de chance de ocorrer um erro em cada bit da transmissao (Atual = %f%%)\n",CHANCE_DE_ERRO);
     printf("4: Tamanho maximo da mensagem (Atual = %d caracteres)\n",TAMANHO_MAXIMO_DA_MENSAGEM);
     printf("5: Tentativas de reenviar a mensagem com erro (Atual = %d tentativas)\n",TENTATIVAS_REENVIO);
     printf("6: Mostrar o menu\n");
@@ -104,7 +109,7 @@ int main (void){
     case 3:
         do{
         printf("Escolha a porcentagem de chance de ocorrer um erro a cada bit da transmissao:\n");
-        scanf(" %d",&CHANCE_DE_ERRO);
+        scanf(" %f",&CHANCE_DE_ERRO);
         }while(!(CHANCE_DE_ERRO>0 && CHANCE_DE_ERRO<100));
         break;
     case 4:
@@ -121,7 +126,7 @@ int main (void){
     case 6:
         printf("1: Iniciar Programa!\n");
         printf("2: Metodo de controle de erros [1=CRC,2=Bit Impar,3=Bit Par,4=Enquadramento] (Atual = %d)\n",METODO_DE_ERROS);
-        printf("3: Porcentagem de chance de ocorrer um erro em cada bit da transmissao (Atual = %d%%)\n",CHANCE_DE_ERRO);
+        printf("3: Porcentagem de chance de ocorrer um erro em cada bit da transmissao (Atual = %f%%)\n",CHANCE_DE_ERRO);
         printf("4: Tamanho maximo da mensagem (Atual = %d caracteres)\n",TAMANHO_MAXIMO_DA_MENSAGEM);
         printf("5: Tentativas de reenviar a mensagem com erro (Atual = %d tentativas)\n",TENTATIVAS_REENVIO);
         printf("6: Mostrar o menu\n");
@@ -236,11 +241,17 @@ boolean CamadaDeEnlaceDadosTransmissora(boolean* msg){
 
     int tentativas;
 
+    Vetorb mensagemfiltrada;
+
     //Chama o controle de Erros
-    if(CamadaDeEnlaceDadosTransmissoraControleDeErro(msg)==TRUE){ // Se o erro foi filtrado, pode chamar a camada física (meio de transmissão)
+    mensagemfiltrada=CamadaDeEnlaceDadosTransmissoraControleDeErro(msg);
+    if(mensagemfiltrada.tamanho!=-1){ // Se o erro foi filtrado, pode chamar a camada física (meio de transmissão)
         
+        //Para enviar corretamente a mensagem, é necessário conhecer o tamanho total dela, para evitar verificações desse tipo no meio (o meio não verifica nada)
+
+
         for(tentativas=TENTATIVAS_REENVIO;tentativas>0;tentativas--){ // Faz o número de tentativas necessárias a função que envia os dados, se nenhuma der certo, retorna um erro
-            if(MeioDeTransmissao(msg)==TRUE) return TRUE; // Se a mensagem foi enviada com sucesso, retorna sucesso
+            if(MeioDeTransmissao(mensagemfiltrada.vetor,mensagemfiltrada.tamanho)==TRUE) return TRUE; // Se a mensagem foi enviada com sucesso, retorna sucesso
         }
         
     } 
@@ -250,75 +261,144 @@ boolean CamadaDeEnlaceDadosTransmissora(boolean* msg){
 }
 
 
-boolean CamadaDeEnlaceDadosTransmissoraControleDeErro(boolean* msg){
+Vetorb CamadaDeEnlaceDadosTransmissoraControleDeErro(boolean* msg){
+
+    int i,tamanho;
+    boolean paridade;
+    //Como, para o método de controle de erros são necessários adicionar/remover bits
+
+    boolean* msgcc; // Representa a mensagem SEM controle
+    Vetorb resultado;
+
+    tamanho=Bits16ToInt(msg);// Captura o tamanho da mensagem
 
     switch (METODO_DE_ERROS)
     {
     case 1: // CRC
-        /* code */
+        //Sera usado o CRC 32, ou seja, o polinomio divisor tem 33 bits
+        //O polinomio usado é x32+x26+x23+x22+x16+x12+x11+x10+x8+x7+x5+x4+x2+x+1 ou 10000010 01100000 10001110 11011011 1
+
+
+
         break;
     case 2: // Paridade Par
-        /* code */
+        // Para a verificação da partidade par, é necessário um bit ao final da mensagem, que conta se o numero de '1's é par 
+        msgcc=(boolean*)malloc(sizeof(boolean)*(tamanho*8)+17); // 8 bits por letra + 16 que representa o tamanho no inicio + o bit de paridade no fim
+        if(msgcc==NULL) {
+            tamanho=-1;
+            return resultado;
+        }
+        paridade=TRUE; // Ao iniciar, o número de '1's é 0, logo a paridade é verdadeira
+        for(i=0;i<(tamanho*8)+16;i++){
+            msgcc[i]=msg[i]; // Copia o valor do vetor original
+            if(msg[i]==TRUE) paridade=Flip(paridade); // Ajusta a partidade
+        }
+        msgcc[(tamanho*8)+16]=paridade; // Coloca o bit de paridade no final
+        resultado.tamanho=(tamanho*8)+17;
         break;
     case 3: // Paridade Impar
-        /* code */
+        // Para a verificação da partidade par, é necessário um bit ao final da mensagem, que conta se o numero de '1's é impar
+        msgcc=(boolean*)malloc(sizeof(boolean)*(tamanho*8)+17); // 8 bits por letra + 16 que representa o tamanho no inicio + o bit de paridade no fim
+        if(msgcc==NULL) {
+            tamanho=-1;
+            return resultado;
+        }
+        paridade=FALSE; // Ao iniciar, o número de '1's é 0, logo a paridade é paridade é falsa (0 é impar)
+        for(i=0;i<(tamanho*8)+16;i++){
+            msgcc[i]=msg[i]; // Copia o valor do vetor original
+            if(msg[i]==TRUE) paridade=Flip(paridade); // Ajusta a partidade
+        }
+        msgcc[(tamanho*8)+16]=paridade; // Coloca o bit de paridade no final
+        resultado.tamanho=(tamanho*8)+17;
         break;
     case 4: // Enquadramento
         /* code */
         break;
 
     }
+  
+    resultado.vetor=msgcc;
+    free(msg); // Libera a mensagem antiga
 
-    return TRUE;
+    return resultado; //Se algum erro foi encontrado, ele foi retornado durante o código de controle.
 }
 
 boolean CamadaDeEnlaceDadosReceptora(boolean* msg){
 
-       if(CamadaDeEnlaceDadosReceptoraControleDeErro(msg)==TRUE){ // Se a mensagem está correta
-       CamadaDeAplicacaoReceptora(msg); // Manda a mensagem para a aplicação
-       return TRUE; //Manda um sinal de deu certo para o meio
-       }
-       //Se não está, manda um sinal de falso que solicita uma retransmissão
-       else return FALSE;
+    msg=CamadaDeEnlaceDadosReceptoraControleDeErro(msg);
+    if(msg!=NULL){ // Se a mensagem está correta
+        CamadaDeAplicacaoReceptora(msg); // Manda a mensagem para a aplicação
+        return TRUE; //Manda um sinal de deu certo para o meio
+    }
+    //Se não está, manda um sinal de falso que solicita uma retransmissão
+    else return FALSE;
 }
 
-boolean CamadaDeEnlaceDadosReceptoraControleDeErro(boolean* msg){
+boolean* CamadaDeEnlaceDadosReceptoraControleDeErro(boolean* msg){
+
+    int i,tamanho;
+    boolean paridade;
+    //Como, para o método de controle de erros são necessários adicionar/remover bits
+
+    boolean* msgcc; // Representa a mensagem SEM controle
+
+    tamanho=Bits16ToInt(msg);// Captura o tamanho da mensagem
 
     switch (METODO_DE_ERROS)
     {
-    case 1: // CRC
+    case 1: // CRC - Usando o Polinomio CRC-32
         /* code */
         break;
     case 2: // Paridade Par
-        /* code */
+        // Para a verificação da partidade par, é necessário um bit ao final da mensagem, que conta se o numero de '1's é par 
+        msgcc=(boolean*)malloc(sizeof(boolean)*(tamanho*8)+16); // 8 bits por letra + 16 que representa o tamanho no inicio SEM o bit de paridade no fim
+        if(msgcc==NULL) return NULL;
+        paridade=TRUE; // Ao iniciar, o número de '1's é 0, logo a paridade é verdadeira
+        for(i=0;i<(tamanho*8)+16;i++){
+            msgcc[i]=msg[i]; // Copia o valor do vetor original
+            if(msg[i]==TRUE) paridade=Flip(paridade); // Ajusta a partidade
+        }
+        if(msg[(tamanho*8)+16]!=paridade){
+//            printf("Erro de paridade detectado!\n");
+            return NULL; // Se a partidade calculada, não coincidir com a enviada, houve um erro na transmissão
+        } 
         break;
     case 3: // Paridade Impar
-        /* code */
+        // Para a verificação da partidade par, é necessário um bit ao final da mensagem, que conta se o numero de '1's é impar
+        msgcc=(boolean*)malloc(sizeof(boolean)*(tamanho*8)+16); // 8 bits por letra + 16 que representa o tamanho no inicio SEM o bit de paridade no fim
+        if(msgcc==NULL) return NULL;
+        paridade=FALSE; // Ao iniciar, o número de '1's é 0, logo a paridade é paridade é falsa (0 é impar)
+        for(i=0;i<(tamanho*8)+16;i++){
+            msgcc[i]=msg[i]; // Copia o valor do vetor original
+            if(msg[i]==TRUE) paridade=Flip(paridade); // Ajusta a partidade
+        }
+        if(msg[(tamanho*8)+16]!=paridade) return NULL; // Se a partidade calculada, não coincidir com a enviada, houve um erro na transmissão
         break;
     case 4: // Enquadramento
         /* code */
         break;
     }
 
-    return TRUE;
+    free(msg); // Libera a mensagem antiga(com bits de controle)
+
+    return msgcc;
 }
 
-boolean MeioDeTransmissao (boolean* msg) {
+boolean MeioDeTransmissao (boolean* msg,int tamanhototal) {
 
-    int erro,tamanho,i;
+    int i;
+    float random;
 
     boolean* fluxoA; // Bits que saem do computador A
     boolean* fluxoB; // Bits que chegam ao computador B
 
     srand(time(NULL)); // Seta a semente aleatória (para ocorrerem erros de flip de bits)
 
-    tamanho=Bits16ToInt(msg);// Captura o tamanho da mensagem
-
     //debug
 
     /*
-    printf("tamanho = %d\n",tamanho);
-    for(i=0;i<(tamanho*8)+16;i++){
+    printf("tamanho = %d\n",tamanhototal);
+    for(i=0;i<tamanhototal;i++){
         if(i%8==0 && i!=0) printf(" ");
         printf("%d",msg[i]);
     } 
@@ -327,36 +407,35 @@ boolean MeioDeTransmissao (boolean* msg) {
    
     // O fluxo que sai de A é a mensagem enviada para o Meio (é necessária uma cópia, para não perder os dados originais, caso haja uma mudança no meio)
     // Lembrando que o simulador não tem como foco a performance mas sim, a simulação.
-    fluxoA= copiaVetor(msg,(tamanho*8)+16); 
-    fluxoB=(boolean*)malloc(sizeof(boolean)*(tamanho*8)+16);
+    fluxoA= copiaVetor(msg,tamanhototal); 
+    fluxoB=(boolean*)malloc(sizeof(boolean)*tamanhototal);
     
     //Começa a transmitir os dados (8 é o numero de bits de cada caracter e 16 é o numero de bits que representam o tamanho)
-    for(i=0;i<(tamanho*8)+16;i++){
+    for(i=0;i<tamanhototal;i++){
         //O bit vai sendo normalmente transferido
         fluxoB[i]=fluxoA[i];
         //E aqui a probabilidade de um bit ser 'flipado' entra:
-        //Se um numero aleatorio entre 1 e 100 for menor ou igual que a probabilidade de dar erro, o erro acontece e o bit é flipado
-        if((rand()%100+1)<=CHANCE_DE_ERRO){
-            if(fluxoB[i]==TRUE) fluxoB[i]=FALSE;
-            else fluxoB[i]=TRUE;
+        //Se um numero aleatorio, com 2 casas decimais entre 1 e 100 for menor ou igual que a probabilidade de dar erro, o erro acontece e o bit é flipado
+        random=((float)(rand()%100+1)+((float)(rand()%100))/100);
+      //  printf("%f ",random);
+        if(i>16&&random<=CHANCE_DE_ERRO){
+            fluxoB[i]=Flip(fluxoB[i]);
+//            printf("Ocorreu um erro no meio de transmissao\n");
         }
     }
 
  //   printf("fluxoB= ");
  //   for(i=0;i<(tamanho*8)+16;i++) printf("%d",fluxoB[i]);
 
+    //Com a mensagem transmitida, não existe mais fluxo
+    free(fluxoB);
+    free(fluxoA);
+
     //Passa os dados para camada de enlace receptora, se ela não detectou erros, ela envia um ack que retorna para a camada transmissora confirmando o envio correto dos dados
-    if(CamadaDeEnlaceDadosReceptora(fluxoB)==TRUE){
-        free(fluxoB);
-        free(fluxoA);
-        return TRUE;
-    }
     //Se os dados não estavam íntegros na camada de enlace receptora, um sinal é enviado para a camada transmissora, pedindo a retransmissão.
-    else{
-        free(fluxoB);
-        free(fluxoA);
-        return FALSE;
-    } 
+    if(CamadaDeEnlaceDadosReceptora(fluxoB)==TRUE) return TRUE;
+    else return FALSE;
+    
 
 }
 
@@ -490,4 +569,9 @@ int Bits8ToInt(boolean* int8bits){
     }
 
     return numero;
+}
+
+boolean Flip(boolean bit){
+    if(bit==FALSE) return TRUE;
+    else return FALSE;
 }
