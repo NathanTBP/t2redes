@@ -81,32 +81,27 @@ bool App::AplicacaoTransmissora() {
     vector<bool> bits;
     string msg;
 
-    cout << "Digite uma mensagem (tamanho requirido:" << this->msgLength <<  "):" << endl;
+    cout << "Digite uma mensagem (tamanho requirido: " << this->msgLength <<  "):" << endl;
+
+    cin >> msg;
 
     while (msg.length() > this->msgLength)
         cin >> msg;
-    
-    // Adiciona os bits faltantes na mensagem
-    if (msg.length() < this->msgLength) {
-        for (int i = 0; i < (this->msgLength - msg.length()); i++) {
-            bits.push_back(false);
-        }
-    }
 
     // Chama a primeira camada (Aplicação)
-    if (this->CamadaDeAplicacaoTransmissora(stringToBinary(msg)))
+    if (this->CamadaDeAplicacaoTransmissora(msg))
         return true;
     
     return false;
 }
 
-bool App::CamadaDeAplicacaoTransmissora(vector<bool> bits) {
+bool App::CamadaDeAplicacaoTransmissora(string msg) {
     // A camada de Aplicação transmissora quer, receber uma string da aplicação, transformá-la em bits e enviá-la a próxima camada
     // Que usualmente é a camada de Transporte, porém, neste trabalho, é diretamente a de enlace
 
-    if (this->CamadaDeEnlaceDadosTransmissora(bits))
+    if (this->CamadaDeEnlaceDadosTransmissora(stringToBinary(msg)))
         return true;
-    
+
     return false;
 }
 
@@ -121,6 +116,8 @@ bool App::CamadaDeEnlaceDadosTransmissora(vector<bool> bits) {
                 return true;
         }
     }
+
+    cout << "Tentativas esgotadas!" << endl;
 
     return false;
 }
@@ -233,6 +230,7 @@ bool App::AplicacaoReceptora(vector<bool> bits) {
     // A aplicação receptora quer imprimir a mensagem na tela
 
     cout << "A mensagem recebida foi: ";
+
     string data;
 
     for (int i = 0; i < bits.size(); i++) {

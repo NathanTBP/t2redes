@@ -4,7 +4,12 @@
 vector<bool> computeCRC(vector<bool> data) {
     // Initialize CRC value
     vector<bool> crc;
-    vector<bool> generator = stringToBinary("11011");
+    string generatorString = "11101101101110001000001100100000";
+    vector<bool> generator;
+
+    for (int i = 0; i < generatorString.length(); i++) {
+        generator.push_back(generatorString[i] == '1');
+    }
 
     for (int i = 0; i < generator.size() - 1; i++) {
         data.push_back(false);
@@ -41,8 +46,8 @@ vector<bool> computeCRC(vector<bool> data) {
         }
     }
 
-    for (int i = 0; i < generator.size(); i++) {
-        if (crc.size() == generator.size())
+    for (int i = 0; i < generator.size() - 1; i++) {
+        if (crc.size() == generator.size() - 1)
             break;
         else
             crc.insert(crc.begin() + i, false);
@@ -51,10 +56,15 @@ vector<bool> computeCRC(vector<bool> data) {
     return crc;
 }
 
-bool decodeCRC(vector<bool> data) {
+bool decodeCRC(vector<bool>& data) {
     // Todo: Implement
     vector<bool> crc;
-    vector<bool> generator = stringToBinary("11011");
+    string generatorString = "11101101101110001000001100100000";
+    vector<bool> generator;
+
+    for (int i = 0; i < generatorString.length(); i++) {
+        generator.push_back(generatorString[i] == '1');
+    }
     
     for (int i = 0; i < data.size(); i++) {
         if (crc.size() == 0) {
@@ -90,6 +100,10 @@ bool decodeCRC(vector<bool> data) {
     for (int i = 0; i < crc.size(); i++) {
         if (crc[i] == true)
             return false;
+    }
+
+    for (int i = 0; i < generator.size() - 1; i++) {
+        data.pop_back();
     }
     
     return true;

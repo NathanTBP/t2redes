@@ -12,7 +12,7 @@ using namespace std;
  * @return true 
  * @return false 
  */
-bool parityChecker(vector<bool> bits, bool parity);
+bool parityChecker(vector<bool>& bits, bool parity);
 /**
  * @brief 
  * 

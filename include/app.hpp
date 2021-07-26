@@ -42,7 +42,7 @@ class App {
          * @return true 
          * @return false 
          */
-        bool CamadaDeAplicacaoTransmissora(vector<bool> bits);
+        bool CamadaDeAplicacaoTransmissora(string msg);
         /**
          * @brief 
          * 

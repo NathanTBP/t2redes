@@ -1,6 +1,6 @@
 #include "../include/parity.hpp"
 
-bool parityChecker(vector<bool> bits, bool parity) {
+bool parityChecker(vector<bool>& bits, bool parity) {
     for (int i = 0; i < bits.size(); i++) {
         if (bits[i])
             parity = !parity;
@@ -23,4 +23,6 @@ bool addParity(vector<bool>& bits, bool parity) {
     }
 
     bits.push_back(parity);
+
+    return true;
 }

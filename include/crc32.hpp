@@ -18,4 +18,4 @@ vector<bool> computeCRC(vector<bool> bits);
  * @return true 
  * @return false 
  */
-bool decodeCRC(vector<bool> bits);
+bool decodeCRC(vector<bool>& bits);
