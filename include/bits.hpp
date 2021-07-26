@@ -4,4 +4,10 @@
 
 using namespace std;
 
+/**
+ * @brief 
+ * 
+ * @param s 
+ * @return vector<bool> 
+ */
 vector<bool> stringToBinary(string s);

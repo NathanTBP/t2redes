@@ -18,7 +18,7 @@ void App::welcomeMessage() {
 }
 
 bool App::canCloseMenu() {
-    return !this->isClosed;
+    return this->isClosed;
 }
 
 void App::loop() {
