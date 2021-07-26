@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <vector>
+#include <bitset>
 
 using namespace std;
 
@@ -11,3 +12,11 @@ using namespace std;
  * @return vector<bool> 
  */
 vector<bool> stringToBinary(string s);
+
+/**
+ * @brief 
+ * 
+ * @param s 
+ * @return string 
+ */
+string charStringToBinaryString(string s);

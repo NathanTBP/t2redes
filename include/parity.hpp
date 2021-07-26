@@ -8,14 +8,17 @@ using namespace std;
  * @brief 
  * 
  * @param bits 
- * @return vector<bool> 
+ * @param parity 
+ * @return true 
+ * @return false 
  */
-vector<bool> computeCRC(vector<bool> bits);
+bool parityChecker(vector<bool> bits, bool parity);
 /**
  * @brief 
  * 
  * @param bits 
+ * @param parity 
  * @return true 
  * @return false 
  */
-bool decodeCRC(vector<bool> bits);
+bool addParity(vector<bool>& bits, bool parity);

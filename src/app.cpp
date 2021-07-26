@@ -1,5 +1,7 @@
 #include "../include/app.hpp"
 #include "../include/bits.hpp"
+#include "../include/parity.hpp"
+#include "../include/crc32.hpp"
 #include <iostream>
 
 App::App() {
@@ -123,13 +125,25 @@ bool App::CamadaDeEnlaceDadosTransmissora(vector<bool> bits) {
     return false;
 }
 
-bool App::CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool> bits) {
+bool App::CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool>& bits) {
+    vector<bool> newBitsToAdd;
+
     switch (this->errorMethod) {
-        case 1: // CRC32            
+        case 1: // CRC32
+            newBitsToAdd = computeCRC(bits);
+            
+            for (int i = 0; i < newBitsToAdd.size(); i++) {
+                bits.push_back(newBitsToAdd[i]);
+            }
+
             break;
         case 2: // Paridade Par
+            addParity(bits, true);
+
             break;
         case 3: // Paridade Impar
+            addParity(bits, false);
+
             break;
         default:
             break;
@@ -139,16 +153,36 @@ bool App::CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool> bits) {
 }
 
 bool App::MeioDeTransmissao(vector<bool> bits) {
-    int error;
-    int length;
-    int i;
+    float random;
+
+    // Bits que saem do computador A
+    vector<bool> fluxA;
+    // Bits que chegam ao computador B
+    vector<bool> fluxB(bits.size());
 
     // Seta a semente aleatória (para ocorrerem erros de flip de bits)
     srand(time(NULL));
 
-    // Todo: rework
-    
-    return false;
+    // O fluxo que sai de A é a mensagem enviada para o Meio (é necessária uma cópia, para não perder os dados originais, caso haja uma mudança no meio)
+    // Lembrando que o simulador não tem como foco a performance mas sim, a simulação.
+    fluxA = bits;
+
+    //Começa a transmitir os dados (8 é o numero de bits de cada caracter e 16 é o numero de bits que representam o tamanho)
+    for(int i = 0; i < bits.size(); i++){
+        // O bit vai sendo normalmente transferido
+        fluxB[i] = fluxA[i];
+
+        // E aqui a probabilidade de um bit ser 'flipado' entra:
+        // Se um numero aleatorio, com 2 casas decimais entre 1 e 100 for menor ou igual que a probabilidade de dar erro, o erro acontece e o bit é flipado
+        random = ((float)(rand() % 100 + 1) + ((float)(rand() % 100)) / 100);
+
+        if (random <= this->errorProbability)
+            fluxB[i] = !fluxB[i];
+    }
+
+    // Passa os dados para camada de enlace receptora, se ela não detectou erros, ela envia um ack que retorna para a camada transmissora confirmando o envio correto dos dados
+    // Se os dados não estavam íntegros na camada de enlace receptora, um sinal é enviado para a camada transmissora, pedindo a retransmissão.
+    return CamadaDeEnlaceDadosReceptora(fluxB);
 }
 
 bool App::CamadaDeEnlaceDadosReceptora(vector<bool> bits) {
@@ -164,13 +198,19 @@ bool App::CamadaDeEnlaceDadosReceptora(vector<bool> bits) {
     return false;
 }
 
-bool App::CamadaDeEnlaceDadosReceptoraControleDeErro(vector<bool> bits) {
+bool App::CamadaDeEnlaceDadosReceptoraControleDeErro(vector<bool>& bits) {
     switch (this->errorMethod) {
-        case 1: // CRC32            
+        case 1: // CRC32
+            return decodeCRC(bits);
+
             break;
         case 2: // Paridade Par
+            return parityChecker(bits, true);
+
             break;
         case 3: // Paridade Impar
+            return parityChecker(bits, false);
+
             break;
         default:
             break;
@@ -193,12 +233,27 @@ bool App::AplicacaoReceptora(vector<bool> bits) {
     // A aplicação receptora quer imprimir a mensagem na tela
 
     cout << "A mensagem recebida foi: ";
+    string data;
 
     for (int i = 0; i < bits.size(); i++) {
-        cout << bits[i];
+        if (bits[i]) {
+            data += "1";
+        } else {
+            data += "0";
+        }
     }
 
-    cout << endl;
+    stringstream sstream(data);
+    string output;
+
+    while (sstream.good()) {
+        bitset<8> bits;
+        sstream >> bits;
+        char c = char(bits.to_ulong());
+        output += c;
+    }
+
+    cout << output << endl;
 
     return true;
 }

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <vector>
+#include <sstream>
 
 using namespace std;
 
@@ -16,9 +17,9 @@ class App {
 
         // Message
         int     msgLength = 100;
-        int     errorMethod = 0; // 0 = ?, 1 = ?, 2= ?
-        int     errorProbability = 0;
-        int     tries = 0;
+        int     errorMethod = 2; // 0 = ?, 1 = ?, 2= ?
+        int     tries = 5;
+        float   errorProbability = 1.5;
 
         void welcomeMessage();
     public:
@@ -57,7 +58,7 @@ class App {
          * @return true 
          * @return false 
          */
-        bool CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool> bits);
+        bool CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool>& bits);
         bool MeioDeTransmissao(vector<bool> bits);
         /**
          * @brief 
@@ -74,7 +75,7 @@ class App {
          * @return true 
          * @return false 
          */
-        bool CamadaDeEnlaceDadosReceptoraControleDeErro(vector<bool> bits);
+        bool CamadaDeEnlaceDadosReceptoraControleDeErro(vector<bool>& bits);
         /**
          * @brief 
          * 
