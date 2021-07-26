@@ -5,3 +5,4 @@
 using namespace std;
 
 vector<bool> stringToBinary(string s);
+string binaryToString(vector<bool> bits);

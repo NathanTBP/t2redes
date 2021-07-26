@@ -1,6 +1,7 @@
 #include "../include/app.hpp"
 #include "../include/bits.hpp"
 #include <iostream>
+#include <time.h>
 
 App::App() {
     this->welcomeMessage();
@@ -76,7 +77,6 @@ void App::loop() {
 
 bool App::AplicacaoTransmissora() {
     // A aplicação transmissora quer, requisitar uma string do usuário e enviá-la a outra máquina
-    vector<bool> bits;
     string msg;
 
     cout << "Digite uma mensagem (tamanho requirido:" << this->msgLength <<  "):" << endl;
@@ -84,23 +84,19 @@ bool App::AplicacaoTransmissora() {
     while (msg.length() > this->msgLength)
         cin >> msg;
     
-    // Adiciona os bits faltantes na mensagem
-    if (msg.length() < this->msgLength) {
-        for (int i = 0; i < (this->msgLength - msg.length()); i++) {
-            bits.push_back(false);
-        }
-    }
-
     // Chama a primeira camada (Aplicação)
-    if (this->CamadaDeAplicacaoTransmissora(stringToBinary(msg)))
+    if (this->CamadaDeAplicacaoTransmissora(msg))
         return true;
     
     return false;
 }
 
-bool App::CamadaDeAplicacaoTransmissora(vector<bool> bits) {
+bool App::CamadaDeAplicacaoTransmissora(string msg) {
     // A camada de Aplicação transmissora quer, receber uma string da aplicação, transformá-la em bits e enviá-la a próxima camada
     // Que usualmente é a camada de Transporte, porém, neste trabalho, é diretamente a de enlace
+
+    vector<bool> bits;
+    bits=stringToBinary(msg);
 
     if (this->CamadaDeEnlaceDadosTransmissora(bits))
         return true;
@@ -123,13 +119,19 @@ bool App::CamadaDeEnlaceDadosTransmissora(vector<bool> bits) {
     return false;
 }
 
-bool App::CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool> bits) {
+bool App::CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool> &bits) {
     switch (this->errorMethod) {
         case 1: // CRC32            
             break;
         case 2: // Paridade Par
+        bool paridade=true; // Ao iniciar, o número de '1's é 0, logo a paridade é verdadeira
+        for(int i=0;i<bits.size();i++) if(bits[i]) paridade=!paridade;
+        bits.push_back(paridade);
             break;
         case 3: // Paridade Impar
+        bool paridade=false; // Ao iniciar, o número de '1's é 1, logo a paridade é falsa
+        for(int i=0;i<bits.size();i++) if(bits[i]) paridade=!paridade;
+        bits.push_back(paridade);
             break;
         default:
             break;
@@ -139,16 +141,34 @@ bool App::CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool> bits) {
 }
 
 bool App::MeioDeTransmissao(vector<bool> bits) {
-    int error;
-    int length;
+
     int i;
+    float random;
+
+    vector<bool> fluxA; // Bits que saem do computador A
+    vector<bool> fluxB(bits.size()); // Bits que chegam ao computador B
 
     // Seta a semente aleatória (para ocorrerem erros de flip de bits)
     srand(time(NULL));
 
-    // Todo: rework
+    // O fluxo que sai de A é a mensagem enviada para o Meio (é necessária uma cópia, para não perder os dados originais, caso haja uma mudança no meio)
+    // Lembrando que o simulador não tem como foco a performance mas sim, a simulação.
+    fluxA = bits;
+
+    //Começa a transmitir os dados (8 é o numero de bits de cada caracter e 16 é o numero de bits que representam o tamanho)
+    for(i=0;i<bits.size();i++){
+        //O bit vai sendo normalmente transferido
+        fluxB[i]=fluxA[i];
+        //E aqui a probabilidade de um bit ser 'flipado' entra:
+        //Se um numero aleatorio, com 2 casas decimais entre 1 e 100 for menor ou igual que a probabilidade de dar erro, o erro acontece e o bit é flipado
+        random=((float)(rand()%100+1)+((float)(rand()%100))/100);
+        if(random<=this->errorProbability) fluxB[i]=!fluxB[i];
+    }
+
+    //Passa os dados para camada de enlace receptora, se ela não detectou erros, ela envia um ack que retorna para a camada transmissora confirmando o envio correto dos dados
+    //Se os dados não estavam íntegros na camada de enlace receptora, um sinal é enviado para a camada transmissora, pedindo a retransmissão.
+    return CamadaDeEnlaceDadosReceptora(fluxB);
     
-    return false;
 }
 
 bool App::CamadaDeEnlaceDadosReceptora(vector<bool> bits) {
@@ -169,8 +189,23 @@ bool App::CamadaDeEnlaceDadosReceptoraControleDeErro(vector<bool> bits) {
         case 1: // CRC32            
             break;
         case 2: // Paridade Par
+        bool paridade=true;
+        for(int i=0;i<bits.size();i++) if(bits[i]) paridade=!paridade;
+        if(paridade==bits.back()){
+            bits.pop_back();
+            return true;
+        }
+        else return false;
             break;
         case 3: // Paridade Impar
+        bool paridade=false; // Ao iniciar, o número de '1's é 1, logo a paridade é falsa
+        for(int i=0;i<bits.size();i++) if(bits[i]) paridade=!paridade;
+        if(paridade==bits.back()){
+            bits.pop_back();
+            return true;
+        }
+        else return false;
+        
             break;
         default:
             break;
@@ -182,23 +217,21 @@ bool App::CamadaDeEnlaceDadosReceptoraControleDeErro(vector<bool> bits) {
 bool App::CamadaDeAplicacaoReceptora(vector<bool> bits) {
     // A camada de apicação receptura, recebe uma array de bits
 
-    if (this->AplicacaoReceptora(bits))
+    string mensagem;
+
+    mensagem = binaryToString(bits);
+
+    if (this->AplicacaoReceptora(mensagem))
         return true;
 
     // Ocorreu algum erro
     return false;
 }
 
-bool App::AplicacaoReceptora(vector<bool> bits) {
+bool App::AplicacaoReceptora(string mensagem) {
     // A aplicação receptora quer imprimir a mensagem na tela
 
-    cout << "A mensagem recebida foi: ";
-
-    for (int i = 0; i < bits.size(); i++) {
-        cout << bits[i];
-    }
-
-    cout << endl;
+    cout << "A mensagem recebida foi: " << mensagem << endl;
 
     return true;
 }

@@ -25,12 +25,12 @@ class App {
 
         //
         bool AplicacaoTransmissora();
-        bool CamadaDeAplicacaoTransmissora(vector<bool> bits);
+        bool CamadaDeAplicacaoTransmissora(string msg);
         bool CamadaDeEnlaceDadosTransmissora(vector<bool> bits);
-        bool CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool> bits);
+        bool CamadaDeEnlaceDadosTransmissoraControleDeErro(vector<bool>& bits);
         bool MeioDeTransmissao(vector<bool> bits);
         bool CamadaDeEnlaceDadosReceptora(vector<bool> bits);
         bool CamadaDeEnlaceDadosReceptoraControleDeErro(vector<bool> bits);
         bool CamadaDeAplicacaoReceptora(vector<bool> bits);
-        bool AplicacaoReceptora(vector<bool> bits);
+        bool AplicacaoReceptora(string mensagem);
 };
