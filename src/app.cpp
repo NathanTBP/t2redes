@@ -83,10 +83,13 @@ bool App::AplicacaoTransmissora() {
 
     cout << "Digite uma mensagem (tamanho requirido: " << this->msgLength <<  "):" << endl;
 
-    cin >> msg;
+    cin.ignore();
+    getline(cin, msg);
 
-    while (msg.length() > this->msgLength)
-        cin >> msg;
+    while (msg.length() > this->msgLength) {
+        cin.ignore();
+        getline(cin, msg);
+    }
 
     // Chama a primeira camada (Aplicação)
     if (this->CamadaDeAplicacaoTransmissora(msg))
